@@ -27,10 +27,12 @@ public:
 #ifndef _WIN32
     const bool useDedicatedXvfb;
 #endif
+    const bool blockFileScheme;
     const string startPage;
     const string dataDir;
     const int windowLimit;
     const vector<pair<string, optional<string>>> chromiumArgs;
+    bool showSoftNavigationButtons;
 };
 
 }

@@ -4,6 +4,12 @@ A web "proxy" server that enables browsing the modern web on historical browsers
 
 ## News
 
+2022-11-23: [Browservice 0.9.6.1](https://github.com/ttalvitie/browservice/releases/tag/v0.9.6.1) has been released.
+
+2022-11-05: [Browservice 0.9.6.0](https://github.com/ttalvitie/browservice/releases/tag/v0.9.6.0) has been released.
+
+2022-03-26: [Browservice 0.9.5.0](https://github.com/ttalvitie/browservice/releases/tag/v0.9.5.0) has been released. This release adds support for soft navigation buttons in the browser area and partial blocking of local file access.
+
 2021-12-19: [Browservice 0.9.4.0](https://github.com/ttalvitie/browservice/releases/tag/v0.9.4.0) has been released. This release adds support for running the proxy server on Windows (both 32-bit and 64-bit) and drops support for the i386 architecture on Linux (as Chromium no longer supports it).
 
 2021-09-24: [Browservice 0.9.3.0](https://github.com/ttalvitie/browservice/releases/tag/v0.9.3.0) has been released. This release adds support for bookmarks and changing URL from the client browser by appending `goto/URL` to the address.
@@ -26,7 +32,7 @@ Initially, this approach of sending the whole browser view as a new image every 
 
 The current features of Browservice include the following:
 
-- Viewing of and keyboard/mouse interaction with all the web pages supported by the Chromium browser; this includes web apps such as YouTube, Gmail, GitHub, Office on the web, Twitter, Facebook and Instagram
+- Viewing of and keyboard/mouse interaction with all the web pages supported by the Chromium browser; this includes web apps such as YouTube, ~Gmail~, GitHub, Office on the web, Twitter, Facebook and Instagram (logging in Gmail and other Google services may be difficult due to new embedded browser login restrictions)
 - Support for multiple concurrent browser windows
 - Text clipboard common to all browser windows (accessed through Ctrl+C and Ctrl+V)
 - Form for accessing the browser clipboard from the client side
@@ -176,11 +182,11 @@ browservice.exe --vice-opt-http-listen-addr=0.0.0.0:8080
 
 **WARNING**: Browservice does not support encrypted connections between the Browservice proxy and the client browser. Therefore, these connections should always be made over a completely trusted/isolated network (or over a secure tunnel).
 
-**WARNING**: The trust between the client and the proxy server has to be mutual, as the client controls a web browser process running on the proxy server. For example, the client can use the `file://` protocol to read files on the proxy server that are accessible to the user running `browservice`.
+**WARNING**: The trust between the client and the proxy server has to be mutual, as the client controls a web browser process running on the proxy server. Even though the `file://` protocol for reading files on the proxy server has been blocked by default, there are probably other ways to for the client to access files and other resources that are available to the user running `browservice`.
 
 **WARNING**: The AppImage or the prebuilt binary directory on Windows (including the embedded Chromium browser) does not update itself. The security updates of your Linux distribution do not update the libraries bundled in the AppImage. To keep the browser up to date, you should periodically install the newest release of Browservice.
 
-The clipboard and browser storage (cookies, local storage, cache, etc.) are shared among all the clients of the same Browservice instance, and thus you should start a separate instance for each user. By default, the browser runs in incognito mode, which means that all the browser storage is lost when the Browservice server is stopped. To avoid losing your session cookies and cache, you can persist the storage by specifying an absolute path to the storage directory in the `--data-dir` option (for example `--data-dir=$HOME/.browservice` on Linux)
+The clipboard and browser storage (cookies, local storage, cache, etc.) are shared among all the clients of the same Browservice instance, and thus you should start a separate instance for each user. By default, the browser runs in incognito mode, which means that all the browser storage is lost when the Browservice server is stopped. To avoid losing your session cookies and cache, you can persist the storage by specifying an absolute path to the storage directory in the `--data-dir` option (for example `--data-dir=$HOME/.browservice/cefdata` on Linux)
 
 There are many other useful command line options in Browservice. To get a list of them, run:
 
@@ -216,7 +222,7 @@ Some notes that might be useful:
 
 - If you have many browser windows open at the same time, your may experience lag due to the per-server keep-alive connection limit of the client browser, as Browservice uses long polling HTTP requests. If you use Internet Explorer version up to 6 on Windows, the limit can be set by creating/setting the `MaxConnectionsPerServer` DWORD value in registry key `HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings`. As a rule of thumb, the value should be at least the number of browser windows multiplied by two.
 
-- By default, Browservice can't play videos that use proprietary audio/video codecs such as H264 and AAC, as the prebuilt CEF distribution [provided by Spotify](https://cef-builds.spotifycdn.com/index.html) does not include them. To add the codecs, build the CEF distribution by following the [instructions](https://bitbucket.org/chromiumembedded/cef/wiki/AutomatedBuildSetup.md) with the options `proprietary_codecs=true ffmpeg_branding=Chrome` appended to the environment variable `GN_DEFINES`. After this, you should repeat the Browservice installation process with one exception: prior to running `setup_cef.sh`, copy the CEF distribution produced by the build to `cef.tar.bz2` instead of using `download_cef.sh` to download it. Note that building CEF takes a lot of time, memory and disk space. Also note that you may have to pay license fees to use the proprietary codecs legally, as they are encumbered by patents.
+- By default, Browservice can't play videos that use proprietary audio/video codecs such as H264 and AAC, as the prebuilt CEF distribution [provided by Spotify](https://cef-builds.spotifycdn.com/index.html) does not include them. To add the codecs, build the CEF distribution by following the [instructions](https://bitbucket.org/chromiumembedded/cef/wiki/AutomatedBuildSetup.md) with the options `proprietary_codecs=true ffmpeg_branding=Chrome` appended to the environment variable `GN_DEFINES` (on Windows, you need to build the patched CEF version as shown in the [Windows build instructions](winbuild/README.md)). After this, you should proceed with the Browservice build process, using your self-built CEF instead of the prebuilt CEF distribution (in a [Linux build](BUILD.md), prior to running `setup_cef.sh`, copy the CEF distribution produced by the build to `cef.tar.bz2` instead of using `download_cef.sh` to download it). Note that building CEF takes a lot of time, memory and disk space. Also note that you may have to pay license fees to use the proprietary codecs legally, as they are encumbered by patents.
 
 ## Troubleshooting
 

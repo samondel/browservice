@@ -8,10 +8,12 @@
     CONF_FOREACH_OPT_ITEM(vicePlugin) \
     CONF_FOREACH_OPT_ITEM(userAgent) \
     CONF_FOREACH_OPT_ITEM_USE_DEDICATED_XVFB \
+    CONF_FOREACH_OPT_ITEM(blockFileScheme) \
     CONF_FOREACH_OPT_ITEM(startPage) \
     CONF_FOREACH_OPT_ITEM(dataDir) \
     CONF_FOREACH_OPT_ITEM(windowLimit) \
-    CONF_FOREACH_OPT_ITEM(chromiumArgs)
+    CONF_FOREACH_OPT_ITEM(chromiumArgs) \
+    CONF_FOREACH_OPT_ITEM(showSoftNavigationButtons)
 
 CONF_DEF_OPT_INFO(vicePlugin) {
     const char* name = "vice-plugin";
@@ -55,13 +57,26 @@ CONF_DEF_OPT_INFO(useDedicatedXvfb) {
     string desc() {
         return
             "if enabled, the browser is run in its own Xvfb X server; "
-            "otherwise, the browser shares the X session of the environment (including, e.g., the clipboard)";
+            "otherwise, the browser shares the X session of the environment";
     }
     bool defaultVal() {
         return true;
     }
 };
 #endif
+
+CONF_DEF_OPT_INFO(blockFileScheme) {
+    const char* name = "block-file-scheme";
+    const char* valSpec = "YES/NO";
+    string desc() {
+        return
+            "if enabled, attempts to access local files through the file:// URI scheme are blocked "
+            "(WARNING: there may be ways around the block; do NOT allow untrusted users to access Browservice)";
+    }
+    bool defaultVal() {
+        return true;
+    }
+};
 
 CONF_DEF_OPT_INFO(startPage) {
     const char* name = "start-page";
@@ -163,5 +178,17 @@ CONF_DEF_OPT_INFO(chromiumArgs) {
             start = end + 1;
         }
         return ret;
+    }
+};
+
+CONF_DEF_OPT_INFO(showSoftNavigationButtons) {
+    const char* name = "show-soft-navigation-buttons";
+    const char* valSpec = "YES/NO";
+    string desc() {
+        return
+            "if enabled, navigation buttons (Back/Forward/Refresh/Home) are added to the control bar in the browser view";
+    }
+    bool defaultVal() {
+        return false;
     }
 };

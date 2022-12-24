@@ -11,6 +11,22 @@
 
 namespace browservice {
 
+namespace {
+// Only works for fully qualified and normalized URLs, such as the ones from CefRequest::GetURL.
+bool isLocalFileRequestURL(string url) {
+    if(url.size() >= 5) {
+        string prefix = url.substr(0, 5);
+        for(char& c : prefix) {
+            c = tolower((unsigned char)c);
+        }
+        if(prefix == "file:") {
+            return true;
+        }
+    }
+    return false;
+}
+}
+
 class Window::Client :
     public CefClient,
     public CefLifeSpanHandler,
@@ -36,6 +52,7 @@ public:
 
         lastFindID_ = -1;
         certificateErrorPageSignKey_ = generateDataURLSignKey();
+        fileSchemeBlockedPageSignKey_ = generateDataURLSignKey();
     }
 
     // CefClient:
@@ -215,6 +232,11 @@ public:
                 window_->rootWidget_->browserArea()->showError(
                     "Loading URL failed due to a certificate error"
                 );
+            } else if(readSignedDataURL(frame->GetURL(), fileSchemeBlockedPageSignKey_)) {
+                window_->rootWidget_->browserArea()->showError(
+                    "Access to files through the file:// URI scheme is blocked "
+                    "(do NOT rely on this block for security, as there may be ways around it)"
+                );
             } else {
                 window_->rootWidget_->browserArea()->clearError();
             }
@@ -260,6 +282,14 @@ public:
             frame->LoadURL(
                 createSignedDataURL(failedURL, certificateErrorPageSignKey_)
             );
+        } else if(
+            errorCode == ERR_ABORTED &&
+            globals->config->blockFileScheme &&
+            isLocalFileRequestURL(failedURL)
+        ) {
+            frame->LoadURL(
+                createSignedDataURL(failedURL, fileSchemeBlockedPageSignKey_)
+            );
         } else if(errorCode != ERR_ABORTED) {
             string msg = "Loading URL failed due to error: " + string(errorText);
             window_->rootWidget_->browserArea()->showError(msg);
@@ -279,21 +309,32 @@ public:
             return;
         }
 
-        optional<string> errorURL =
-            readSignedDataURL(url, certificateErrorPageSignKey_);
-        if(errorURL) {
-            window_->rootWidget_->controlBar()->setAddress(*errorURL);
+        optional<string> errorURL1 = readSignedDataURL(url, certificateErrorPageSignKey_);
+        optional<string> errorURL2 = readSignedDataURL(url, fileSchemeBlockedPageSignKey_);
+        if(errorURL1) {
+            window_->rootWidget_->controlBar()->setAddress(*errorURL1);
+        } else if(errorURL2) {
+            window_->rootWidget_->controlBar()->setAddress(*errorURL2);
         } else {
             window_->rootWidget_->controlBar()->setAddress(url);
         }
         window_->updateSecurityStatus_();
     }
 
-    virtual void OnTitleChange(CefRefPtr<CefBrowser> browser, const CefString& title) override {
+    virtual void OnTitleChange(CefRefPtr<CefBrowser> browser, const CefString& origTitle) override {
         BROWSER_EVENT_HANDLER_CHECKS();
 
         if(window_->state_ != Open) {
             return;
+        }
+
+        string title = origTitle;
+        if(
+            readSignedDataURL(title, certificateErrorPageSignKey_) ||
+            readSignedDataURL(title, fileSchemeBlockedPageSignKey_)
+        ) {
+            // Do not show error message data URLs as titles
+            title = "";
         }
 
         window_->rootWidget_->controlBar()->setPageTitle(title);
@@ -333,6 +374,20 @@ public:
 
         postTask(window_, &Window::updateSecurityStatus_);
         return nullptr;
+    }
+
+    virtual bool OnBeforeBrowse(
+        CefRefPtr<CefBrowser> browser,
+        CefRefPtr<CefFrame> frame,
+        CefRefPtr<CefRequest> request,
+        bool userGesture,
+        bool isRedirect
+    ) override {
+        BROWSER_EVENT_HANDLER_CHECKS();
+
+        // Block local file requests (OnLoadError redirects to error message) if blocking enabled
+        REQUIRE(request);
+        return globals->config->blockFileScheme && isLocalFileRequestURL(request->GetURL());
     }
 
     virtual bool OnCertificateError(
@@ -397,7 +452,6 @@ public:
         const CefString& title,
         const CefString& defaultFilePath,
         const vector<CefString>& acceptFilters,
-        int selectedAcceptFilter,
         CefRefPtr<CefFileDialogCallback> callback
     ) override {
         BROWSER_EVENT_HANDLER_CHECKS();
@@ -406,8 +460,8 @@ public:
         if(
             window_->state_ != Open ||
             (
-                (mode & FILE_DIALOG_TYPE_MASK) != FILE_DIALOG_OPEN &&
-                (mode & FILE_DIALOG_TYPE_MASK) != FILE_DIALOG_OPEN_MULTIPLE
+                mode != FILE_DIALOG_OPEN &&
+                mode != FILE_DIALOG_OPEN_MULTIPLE
             )
         ) {
             callback->Cancel();
@@ -428,7 +482,6 @@ public:
             window_->handle_
         )) {
             window_->fileUploadCallback_ = callback;
-            window_->fileUploadAcceptFilter_ = selectedAcceptFilter;
         } else {
             WARNING_LOG(
                 "Cannot upload in window ", window_->handle_,
@@ -461,6 +514,7 @@ private:
     int lastFindID_;
     optional<string> lastCertificateErrorURL_;
     string certificateErrorPageSignKey_;
+    string fileSchemeBlockedPageSignKey_;
 
     IMPLEMENT_REFCOUNTING(Client);
 };
@@ -594,7 +648,7 @@ void Window::uploadFile(shared_ptr<ViceFileUpload> file) {
     vector<CefString> paths;
     paths.push_back(file->path());
 
-    fileUploadCallback_->Continue(fileUploadAcceptFilter_, paths);
+    fileUploadCallback_->Continue(paths);
     fileUploadCallback_ = nullptr;
 
     // We retain all file uploads until the window cleanup is complete, as we
@@ -787,7 +841,7 @@ void Window::onFind(string text, bool forward, bool findNext) {
     REQUIRE_UI_THREAD();
 
     if(state_ == Open && browser_) {
-        browser_->GetHost()->Find(0, text, forward, false, findNext);
+        browser_->GetHost()->Find(text, forward, false, findNext);
     }
 }
 
@@ -864,6 +918,22 @@ void Window::onOpenBookmarksButtonPressed() {
     }
 }
 
+void Window::onNavigationButtonPressed(int direction) {
+    REQUIRE_UI_THREAD();
+
+    if(state_ == Open) {
+        navigate(direction);
+    }
+}
+
+void Window::onHomeButtonPressed() {
+    REQUIRE_UI_THREAD();
+
+    if(state_ == Open) {
+        navigateToURI(globals->config->startPage);
+    }
+}
+
 void Window::onBrowserAreaViewDirty() {
     REQUIRE_UI_THREAD();
 
@@ -911,8 +981,6 @@ void Window::init_(shared_ptr<WindowEventHandler> eventHandler, uint64_t handle)
     downloadManager_ = DownloadManager::create(self);
 
     watchdogTimeout_ = Timeout::create(1000);
-
-    fileUploadAcceptFilter_ = 0;
 }
 
 void Window::createSuccessful_() {
